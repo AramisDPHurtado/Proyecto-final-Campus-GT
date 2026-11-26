@@ -1,0 +1,163 @@
+openapi: 3.1.0
+info:
+  title: Karting Campus GT API
+  version: 1.0.0
+  description: API del MVP de reservas, grupos y mantenimiento.
+servers:
+  - url: http://localhost:4000/api
+paths:
+  /health:
+    get:
+      summary: Estado del servicio
+      responses:
+        "200": { description: API disponible }
+  /availability:
+    get:
+      summary: Consultar las tandas futuras y el estado de las dos pistas para una fecha calendario
+      parameters:
+        - in: query
+          name: date
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200": { description: Horarios, grupos existentes y pistas libres }
+        "400": { description: Fecha inválida }
+  /auth/register:
+    post:
+      summary: Crear una cuenta de cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Register" }
+      responses:
+        "201": { description: Cuenta creada y sesión iniciada }
+        "409": { description: Correo ya registrado }
+  /auth/login:
+    post:
+      summary: Iniciar sesión
+      responses:
+        "200": { description: Usuario y token de acceso }
+        "401": { description: Credenciales incorrectas }
+  /auth/me:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Consultar la cuenta autenticada
+      responses:
+        "200": { description: Cuenta autenticada }
+        "401": { description: Sesión inválida }
+  /sessions:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Crear una tanda y asignar automáticamente la pista libre
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startsAt, guestNames, joinPolicy]
+              properties:
+                startsAt: { type: string, format: date-time }
+                guestNames: { type: array, minItems: 1, maxItems: 7, items: { type: string } }
+                joinPolicy: { type: string, enum: [open, approval] }
+      responses:
+        "201": { description: Tanda creada }
+        "400": { description: Datos u horario inválidos }
+        "409": { description: No quedan pistas libres }
+  /sessions/{id}:
+    get:
+      summary: Consultar una tanda activa
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Tanda y participantes }
+        "404": { description: Tanda no encontrada }
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Cancelar una tanda propia antes de su inicio
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Tanda cancelada }
+        "409": { description: No se puede cancelar }
+  /sessions/{id}/join-requests:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Solicitar unirse o incorporarse automáticamente según la política del grupo
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Incorporación automática completada }
+        "202": { description: Solicitud enviada al anfitrión }
+        "409": { description: Grupo completo o solicitud duplicada }
+  /join-requests/{id}/approve:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Aprobar solicitud como anfitrión
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Solicitud aprobada }
+        "403": { description: Solo el anfitrión puede aprobar }
+        "409": { description: No hay cupo o la solicitud ya fue resuelta }
+  /join-requests/{id}/reject:
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Rechazar solicitud como anfitrión
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Solicitud rechazada }
+        "403": { description: Solo el anfitrión puede rechazar }
+  /me/sessions:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Consultar grupos propios, uniones y solicitudes recibidas
+      responses:
+        "200": { description: Tandas y solicitudes pendientes }
+  /sessions/{id}/join-policy:
+    patch:
+      security: [{ bearerAuth: [] }]
+      summary: Cambiar entre grupo abierto y grupo con aprobación
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Política actualizada }
+        "409": { description: No se puede cambiar la política }
+  /admin/blocks:
+    get:
+      security: [{ bearerAuth: [] }]
+      summary: Listar bloqueos de pista (solo administrador)
+      responses:
+        "200": { description: Bloqueos actuales }
+        "403": { description: Se requiere rol administrador }
+    post:
+      security: [{ bearerAuth: [] }]
+      summary: Bloquear una pista por mantenimiento (solo administrador)
+      responses:
+        "201": { description: Bloqueo creado }
+        "409": { description: El intervalo ya está ocupado o bloqueado }
+  /admin/blocks/{id}:
+    delete:
+      security: [{ bearerAuth: [] }]
+      summary: Eliminar bloqueo de mantenimiento (solo administrador)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Bloqueo eliminado }
+        "403": { description: Se requiere rol administrador }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Register:
+      type: object
+      required: [name, email, password]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 100 }

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: campus-gt-karting-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: karting
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - karting-postgres:/var/lib/postgresql/data
+
+volumes:
+  karting-postgres:
